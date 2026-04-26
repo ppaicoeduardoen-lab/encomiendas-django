@@ -1,10 +1,47 @@
 from django.contrib import admin
+from .models import Empleado, Encomienda, HistorialEstado
 
 # Register your models here.
-from .models import Encomienda
-@admin.register(Encomienda)
+
+"""@admin.register(Encomienda)
 class EncomiendaAdmin(admin.ModelAdmin):
-    list_display = ('codigo', 'descripcion', 'peso_kg', 'estado',
-'fecha_envio')
+    list_display = ('codigo', 'descripcion', 'peso_kg', 'estado', 'fecha_registro') # <-- CAMBIADO AQUÍ
     list_filter = ('estado',)
     search_fields = ('codigo', 'descripcion')
+
+# También registra el Historial para que lo veas en el Admin
+@admin.register(HistorialEstado)
+class HistorialEstadoAdmin(admin.ModelAdmin):
+    list_display = ('encomienda', 'estado_anterior', 'estado_nuevo', 'fecha_cambio')"""
+
+
+
+@admin.register(Encomienda)
+class EncomiendaAdmin(admin.ModelAdmin):
+    list_display = (
+        'codigo', 
+        'remitente', 
+        'destinatario', 
+        'ruta', 
+        'estado',
+        'fecha_registro'
+    )
+    list_filter = ('estado', 'ruta')
+    search_fields = ('codigo', 'remitente__nro_doc', 'destinatario__nro_doc')
+    readonly_fields = ('fecha_registro',)
+
+@admin.register(Empleado)
+class EmpleadoAdmin(admin.ModelAdmin):
+    list_display = ('codigo', 'apellidos', 'nombres', 'cargo', 'estado')
+    search_fields = ('codigo', 'apellidos', 'nombres')
+
+@admin.register(HistorialEstado)
+class HistorialEstadoAdmin(admin.ModelAdmin):
+    list_display = (
+        'encomienda', 
+        'estado_anterior', 
+        'estado_nuevo',
+        'empleado', 
+        'fecha_cambio'
+    )
+    readonly_fields = ('fecha_cambio',)
