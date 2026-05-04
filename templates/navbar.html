@@ -1,0 +1,42 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+        <!-- Logo / Marca -->
+        <a class="navbar-brand" href="{% url 'dashboard' %}">
+            <i class="fas fa-shipping-fast me-2"></i>Encomiendas
+        </a>
+
+        {% if user.is_authenticated %}
+            <!-- Menú Colapsable para usuarios logueados -->
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'dashboard' %}">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'encomienda_lista' %}">Encomiendas</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'encomienda_crear' %}">Nueva</a>
+                    </li>
+                </ul>
+
+                <!-- Información de Usuario y Logout -->
+                <div class="d-flex align-items-center">
+                    <span class="navbar-text text-white me-3">
+                        <i class="fas fa-user me-1"></i>{{ user.username }}
+                    </span>
+                    <a href="{% url 'logout' %}" class="btn btn-outline-light btn-sm">
+                        <i class="fas fa-sign-out-alt me-1"></i>Salir
+                    </a>
+                </div>
+            </div>
+        {% else %}
+            <!-- Botón para usuarios no autenticados -->
+            <div class="ms-auto">
+                <a href="{% url 'login' %}" class="btn btn-outline-light">
+                    <i class="fas fa-sign-in-alt me-1"></i>Iniciar sesión
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</nav>
