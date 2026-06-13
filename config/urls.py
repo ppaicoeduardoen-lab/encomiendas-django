@@ -47,7 +47,7 @@ urlpatterns = [
     path('api/<version>/', include('api.urls')),
     # 3. URLS DE DJANGO (Opcional/Respaldo)
     # Útil para recuperar contraseña u otras funciones que no hayas programado manualmente
-    path('accounts/', include('django.contrib.auth.urls')),
+    #path('accounts/', include('django.contrib.auth.urls')),
 ]
 
 if settings.DEBUG:

@@ -51,5 +51,106 @@
     <script src="{% static 'js/main.js' %}"></script>
     
     {% block extra_js %}{% endblock %}
+
+    
 </body>
 </html>
+class EncomiendaWebSocket {
+  constructor(url) {
+    this.url = url;
+    this.ws = null;
+    this.intentos = 0;
+    this.maxIntentos = 10;
+    this.baseDelay = 1000; // 1 segundo inicial
+  }
+
+  conectar() {
+    if (this.ws?.readyState === WebSocket.OPEN) return;
+
+    this.ws = new WebSocket(this.url);
+
+    this.ws.onopen = () => {
+      console.log('Conectado');
+      this.intentos = 0; // resetear contador de reintentos
+      
+      const badge = document.getElementById('ws-badge');
+      if (badge) {
+        badge.textContent = 'EN VIVO';
+        badge.className = 'badge bg-success';
+      }
+    };
+
+    this.ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      this.onMensaje(data);
+    };
+
+    this.ws.onclose = (event) => {
+      const badge = document.getElementById('ws-badge');
+      if (badge) {
+        badge.textContent = 'Reconectando...';
+        badge.className = 'badge bg-warning';
+      }
+
+      if (event.code === 4001) {
+        // No autorizado: no reconectar, redirigir al login
+        window.location.href = '/accounts/login/';
+        return;
+      }
+
+      if (event.code === 1000) {
+        // Cierre normal: no reconectar
+        return;
+      }
+
+      // Backoff exponencial: 1s, 2s, 4s, 8s, ... max 30s
+      const delay = Math.min(
+        this.baseDelay * Math.pow(2, this.intentos),
+        30000
+      );
+      this.intentos++;
+
+      if (this.intentos <= this.maxIntentos) {
+        console.log(`Reconectando en ${delay / 1000}s (intento ${this.intentos})`);
+        setTimeout(() => this.conectar(), delay);
+      } else {
+        if (badge) {
+          badge.textContent = 'Desconectado';
+          badge.className = 'badge bg-danger';
+        }
+      }
+    };
+
+    this.ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+  }
+
+  onMensaje(data) {
+    // Sobrescribir en la instancia o subclase
+    console.log('Mensaje recibido:', data);
+  }
+
+  enviar(data) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(data));
+    }
+  }
+
+  desconectar() {
+    this.intentos = this.maxIntentos + 1; // evitar reconexión
+    this.ws?.close(1000, 'Desconexion manual');
+  }
+}
+
+// Uso:
+const wsEnc = new EncomiendaWebSocket(
+  (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/ws/encomiendas/'
+);
+
+wsEnc.onMensaje = (data) => {
+  if (data.tipo === 'estado_cambio') mostrarToast(data);
+  if (data.tipo === 'stats_actualizado') actualizarDashboard(data.stats);
+};
+
+wsEnc.conectar();

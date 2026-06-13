@@ -26,7 +26,7 @@ urlpatterns = [
 
     # Búsqueda por código de texto
     path('encomiendas/buscar/<str:codigo>/', views.buscar_por_codigo, name='buscar_por_codigo'),
-
+    path('health/', views.health_check, name='health'),
     # API con UUID
     path('api/encomiendas/<uuid:id_api>/', views.encomienda_api, name='encomienda_api'),
 ]

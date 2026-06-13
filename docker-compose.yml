@@ -1,21 +1,23 @@
 version: '3.9'
 
 services:
-  # Servicio de la app Django
   web:
     build: .
-    #command: python manage.py runserver 0.0.0.0:8000
+    command: daphne -b 0.0.0.0 -p 8000 config.asgi:application
     volumes:
       - .:/app
     ports:
-      - "8000:8000"
+      - '8000:8000'
     env_file:
       - .env
     depends_on:
       - db
       - redis
+    environment:
+      - REDIS_URL=redis://redis:6379/1
 
-  # Servicio de PostgreSQL
+    
+
   db:
     image: postgres:15-alpine
     volumes:
@@ -25,23 +27,42 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
 
-  pgadmin:
-    image: dpage/pgadmin4
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: admin
-    ports:
-      - "5050:80"
-    depends_on:
-      - db
-
+  # ── NUEVO: servicio Redis ──────────────────────────────────────
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - '6379:6379' # exponer para conectar con redis-cli local
     volumes:
       - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf # configuracion
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  redis-master:
+    image: redis:7-alpine
+    command: redis-server --port 6379
+    volumes:
+      - redis_master_data:/data
 
+  redis-replica:
+    image: redis:7-alpine
+    command: redis-server --port 6379 --replicaof redis-master 6379
+    depends_on:
+      - redis-master
+
+  redis-sentinel:
+    image: redis:7-alpine
+    command: >
+      redis-sentinel /etc/redis/sentinel.conf
+      --sentinel monitor mymaster redis-master 6379 1
+      --sentinel down-after-milliseconds mymaster 5000
+      --sentinel failover-timeout mymaster 10000
+    depends_on:
+      - redis-master
+      - redis-replica
 volumes:
   postgres_data:
   redis_data:

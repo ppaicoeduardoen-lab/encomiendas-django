@@ -7,6 +7,9 @@ from django.http import HttpResponse, JsonResponse, Http404, HttpResponseForbidd
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.core.paginator import Paginator
+import redis
+from django.conf import settings
+
 
 # Importaciones de modelos y recursos locales
 from .models import Encomienda, Empleado, HistorialEstado
@@ -28,17 +31,23 @@ def es_empleado_activo(user):
 
 @login_required
 def dashboard(request):
-    """Vista principal con estadísticas de encomiendas"""
+    """
+    Vista principal con estadísticas de encomiendas adaptada para el WebSocket.
+    El template renderiza con los datos iniciales de la BD.
+    El WebSocket actualiza los contadores en tiempo real a partir de ese punto.
+    """
     hoy = timezone.now().date()
     context = {
-        'total_activas': Encomienda.objects.activas().count(),
-        'en_transito': Encomienda.objects.en_transito().count(),
-        'con_retraso': Encomienda.objects.con_retraso().count(),
-        'entregadas_hoy': Encomienda.objects.filter(
-            estado=EstadoEnvio.ENTREGADO, 
-            fecha_entrega_real=hoy
-        ).count(),
-        'ultimas': Encomienda.objects.con_relaciones()[:5],
+        'stats': {
+            'activas': Encomienda.objects.activas().count(),
+            'en_transito': Encomienda.objects.en_transito().count(),
+            'con_retraso': Encomienda.objects.con_retraso().count(),
+            'entregadas_hoy': Encomienda.objects.filter(
+                estado='EN', 
+                fecha_entrega_real=hoy
+            ).count(),
+        },
+        'ultimas': Encomienda.objects.con_relaciones()[:5], # Mantenemos las últimas por si tu dashboard las lista abajo
     }
     return render(request, 'envios/dashboard.html', context)
 
@@ -184,3 +193,72 @@ def encomienda_estado_json(request, pk):
 
 def ping(request):
     return HttpResponse('pong', status=200, content_type='text/plain')
+
+def health_check(request):
+    """
+    GET /health/
+    Verifica que todos los servicios del sistema estén funcionando.
+    Incluye el estado de Redis y del channel layer.
+    """
+    estado = {
+        "postgres": False,
+        "redis": False,
+        "channels": False,
+    }
+
+    # 1. Verificar PostgreSQL
+    try:
+        from django.db import connection
+        connection.ensure_connection()
+        estado["postgres"] = True
+    except Exception as e:
+        estado["postgres_error"] = str(e)
+        logger.error(f"Healthcheck: Error en PostgreSQL: {e}")
+
+    # 2. Verificar Redis directamente
+    try:
+        r = redis.from_url(
+            settings.REDIS_URL,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
+        r.ping()
+        info = r.info()
+        estado["redis"] = True
+        estado["redis_memoria"] = info.get("used_memory_human")
+        estado["redis_clientes"] = info.get("connected_clients")
+        estado["redis_version"] = info.get("redis_version")
+    except Exception as e:
+        estado["redis_error"] = str(e)
+        logger.error(f"Healthcheck: Error en Redis: {e}")
+
+    # 3. Verificar Channel Layer (publicar un mensaje de prueba)
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        
+        cl = get_channel_layer()
+        async_to_sync(cl.group_send)(
+            "health_check",
+            {"type": "health.ping"}
+        )
+        estado["channels"] = True
+    except Exception as e:
+        estado["channels_error"] = str(e)
+        logger.error(f"Healthcheck: Error en Channel Layer: {e}")
+
+    # 4. Contar empleados conectados
+    try:
+        r = redis.from_url(settings.REDIS_URL)
+        # Nota: Ajusta el prefijo según tu configuración ('encomiendas' en este caso)
+        estado["empleados_conectados"] = r.scard(
+            "encomiendas:group:encomiendas_global"
+        )
+    except Exception:
+        estado["empleados_conectados"] = None
+
+    # Evaluación final de salud del sistema
+    todo_ok = all([estado["postgres"], estado["redis"], estado["channels"]])
+    http_status = 200 if todo_ok else 503
+
+    return JsonResponse(estado, status=http_status)

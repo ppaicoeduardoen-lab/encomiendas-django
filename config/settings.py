@@ -14,7 +14,7 @@ from pathlib import Path
 from decouple import config
 import os
 from datetime import timedelta
-
+import sys
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', cast=bool, default=False)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='').split(',')
@@ -268,3 +268,31 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+import os
+
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/1")
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [
+                {
+                    "sentinels": [
+                        ("redis-sentinel", 26379),
+                    ],
+                    "master_name": "mymaster",
+                    "sentinel_kwargs": {},
+                    "db": 1,
+                }
+            ],
+            "prefix": "encomiendas",
+        },
+    }
+}
+if "test" in sys.argv or "pytest" in sys.modules:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        }
+    }
